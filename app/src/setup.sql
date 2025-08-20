@@ -64,10 +64,42 @@ DECLARE
     ingress_url VARCHAR;
 BEGIN
     SHOW ENDPOINTS IN SERVICE app_public.st_spcs;
-    SELECT "ingress_url" INTO :ingress_url FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) LIMIT 1;
+    SELECT "ingress_url" INTO :ingress_url FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'app' LIMIT 1;
     RETURN ingress_url;
 END
 $$;
 GRANT USAGE ON PROCEDURE app_public.app_url() TO APPLICATION ROLE app_admin;
 GRANT USAGE ON PROCEDURE app_public.app_url() TO APPLICATION ROLE app_user;
+
+CREATE OR REPLACE PROCEDURE app_public.falkordb_browser_url()
+    RETURNS string
+    LANGUAGE sql
+    AS
+$$
+DECLARE
+    ingress_url VARCHAR;
+BEGIN
+    SHOW ENDPOINTS IN SERVICE app_public.st_spcs;
+    SELECT "ingress_url" INTO :ingress_url FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'falkordb-browser' LIMIT 1;
+    RETURN ingress_url;
+END
+$$;
+GRANT USAGE ON PROCEDURE app_public.falkordb_browser_url() TO APPLICATION ROLE app_admin;
+GRANT USAGE ON PROCEDURE app_public.falkordb_browser_url() TO APPLICATION ROLE app_user;
+
+CREATE OR REPLACE PROCEDURE app_public.falkordb_endpoint()
+    RETURNS string
+    LANGUAGE sql
+    AS
+$$
+DECLARE
+    ingress_url VARCHAR;
+BEGIN
+    SHOW ENDPOINTS IN SERVICE app_public.st_spcs;
+    SELECT "ingress_url" INTO :ingress_url FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'falkordb' LIMIT 1;
+    RETURN ingress_url;
+END
+$$;
+GRANT USAGE ON PROCEDURE app_public.falkordb_endpoint() TO APPLICATION ROLE app_admin;
+GRANT USAGE ON PROCEDURE app_public.falkordb_endpoint() TO APPLICATION ROLE app_user;
 

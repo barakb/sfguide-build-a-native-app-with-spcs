@@ -4,7 +4,7 @@ use role accountadmin;
 create role if not exists naspcs_role;
 grant role naspcs_role to role accountadmin;
 grant create integration on account to role naspcs_role;
-// grant create compute pool on account to role naspcs_role;
+-- grant create compute pool on account to role naspcs_role;
 grant create warehouse on account to role naspcs_role;
 grant create database on account to role naspcs_role;
 grant create application package on account to role naspcs_role;
@@ -32,7 +32,7 @@ grant usage on warehouse wh_nac to role nac with grant option;
 grant imported privileges on database snowflake_sample_data to role nac;
 grant create database on account to role nac;
 grant bind service endpoint on account to role nac with grant option;
-// grant create compute pool on account to role nac;
+-- grant create compute pool on account to role nac;
 grant create application on account to role nac;
 
 --Step 4.2 - Create Consumer Test Data Database
@@ -47,12 +47,17 @@ create view if not exists orders as select * from snowflake_sample_data.tpch_sf1
 --once we've created the database to store our images and na files we can find the image repository url
 show image repositories in schema spcs_app.napp;
 
+--Step 5.2 - Build and Push All Images (including FalkorDB)
+--use the registry URL from the previous step to configure and build all images
+--run this command in your terminal: ./configure.sh
+--this will prompt for the registry URL and automatically build and push all images including FalkorDB
+
 --Step 6.1 - Create Application Package and Grant Consumer Role Privileges
 --after we've uploaded all of the images and files for the native app we need to create our native app package
 --after creating the package we'll add a version to it using all of the files upload to our spcs_app database
 use role naspcs_role;
 create application package spcs_app_pkg;
-// alter application package spcs_app_pkg add version v1 using @spcs_app.napp.app_stage;
+-- alter application package spcs_app_pkg add version v1 using @spcs_app.napp.app_stage;
 alter application package spcs_app_pkg register version v1 using @spcs_app.napp.app_stage;
 grant install, develop on application package spcs_app_pkg to role nac;
 
@@ -60,7 +65,7 @@ grant install, develop on application package spcs_app_pkg to role nac;
 --at this point we can switch back to our consumer role and create the application in our account using the application package
 --this is simulating the experience of what would otherwise be the consumer installing the app in a separate account
 use role nac;
-create application spcs_app_instance from application package spcs_app_pkg using version v1;
+create application fullstack_app from application package spcs_app_pkg using version v1;
 
 --Step 7.2 - Create Compute Pool for Container Services (Admin)
 --as admin, create a compute pool that supports container services
@@ -78,25 +83,29 @@ create compute pool pool_nac_containers
 
 --grant usage to the NAC role and application
 grant usage on compute pool pool_nac_containers to role nac;
-grant usage on compute pool pool_nac_containers to application spcs_app_instance;
+grant usage on compute pool pool_nac_containers to application fullstack_app;
 
 --switch back to NAC role for remaining operations
 use role nac;
-grant usage on warehouse wh_nac to application spcs_app_instance;
-grant bind service endpoint on account to application spcs_app_instance;
+grant usage on warehouse wh_nac to application fullstack_app;
+grant bind service endpoint on account to application fullstack_app;
 
 --Step 7.3 - Start App Service
 --now using the dedicated container services compute pool
-call spcs_app_instance.app_public.start_app('pool_nac_containers', 'wh_nac');
+call fullstack_app.app_public.start_app('pool_nac_containers', 'wh_nac');
 
 --it takes a few minutes to get the app up and running but you can use the following function to find the app url when it is fully deployed
-call spcs_app_instance.app_public.app_url();
+call fullstack_app.app_public.app_url();
+
+--get FalkorDB endpoints
+call fullstack_app.app_public.falkordb_browser_url();
+call fullstack_app.app_public.falkordb_endpoint();
 
 
 --Step 8.1 - Clean Up
 --clean up consumer objects
 use role nac;
-drop application spcs_app_instance;
+drop application fullstack_app;
 drop warehouse wh_nac;
 drop database nac_test;
 

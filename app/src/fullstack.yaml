@@ -11,7 +11,26 @@ spec:
       env:
         FE_SERVER: 127.0.0.1:8080
         BE_SERVER: 127.0.0.1:8081
+        FALKORDB_SERVER: 127.0.0.1:6379
+        FALKORDB_HTTP_SERVER: 127.0.0.1:3000
+    - name: eap-falkordb
+      image: /spcs_app/napp/img_repo/eap_falkordb
+      env:
+        NEXTAUTH_URL: http://127.0.0.1:3000
+      resources:
+        requests:
+          cpu: 0.5
+          memory: 512M
+        limits:
+          cpu: 1.0
+          memory: 1G
   endpoints:
     - name: app
       port: 8000
+      public: true
+    - name: falkordb
+      port: 6379
+      public: true
+    - name: falkordb-browser
+      port: 3000
       public: true

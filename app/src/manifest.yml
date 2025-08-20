@@ -16,6 +16,7 @@ artifacts:
       - /spcs_app/napp/img_repo/eap_frontend
       - /spcs_app/napp/img_repo/eap_backend
       - /spcs_app/napp/img_repo/eap_router
+      - /spcs_app/napp/img_repo/eap_falkordb
 
 privileges:
  - CREATE COMPUTE POOL:

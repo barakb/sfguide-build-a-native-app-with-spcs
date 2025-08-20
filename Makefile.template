@@ -2,6 +2,7 @@ SNOWFLAKE_REPO?=<<repository_url>>
 BACKEND_IMAGE=eap_backend
 FRONTEND_IMAGE=eap_frontend
 ROUTER_IMAGE=eap_router
+FALKORDB_IMAGE=eap_falkordb
 
 help:            ## Show this help.
 	@fgrep -h "##" $(MAKEFILE_LIST) | fgrep -v fgrep | sed -e 's/\\$$//' | sed -e 's/##//'
@@ -11,7 +12,7 @@ all: login build push
 login:           ## Login to Snowflake Docker repo
 	docker login $(SNOWFLAKE_REPO)
 
-build: build_backend build_frontend build_router  ## Build Docker images for Snowpark Container Services
+build: build_backend build_frontend build_router build_falkordb  ## Build Docker images for Snowpark Container Services
 
 build_backend:   ## Build Docker image for backend for Snowpark Container Services
 	cd backend && docker build --platform linux/amd64 -t $(BACKEND_IMAGE) . && cd ..
@@ -22,7 +23,10 @@ build_frontend:  ## Build Docker image for frontend for Snowpark Container Servi
 build_router:    ## Build Docker image for router for Snowpark Container Services
 	cd router && docker build --platform linux/amd64 -t $(ROUTER_IMAGE) . && cd ..
 
-push: push_backend push_frontend push_router     ## Push Docker images to Snowpark Container Services
+build_falkordb:  ## Build Docker image for FalkorDB for Snowpark Container Services
+	cd falkordb && docker build --platform linux/amd64 -t $(FALKORDB_IMAGE) . && cd ..
+
+push: push_backend push_frontend push_router push_falkordb     ## Push Docker images to Snowpark Container Services
 
 push_backend:    ## Push backend Docker image to Snowpark Container Services
 	docker tag $(BACKEND_IMAGE) $(SNOWFLAKE_REPO)/$(BACKEND_IMAGE)
@@ -35,3 +39,12 @@ push_frontend:   ## Push frontend Docker image to Snowpark Container Services
 push_router:     ## Push router Docker image to Snowpark Container Services
 	docker tag $(ROUTER_IMAGE) $(SNOWFLAKE_REPO)/$(ROUTER_IMAGE)
 	docker push $(SNOWFLAKE_REPO)/$(ROUTER_IMAGE)
+
+push_falkordb:   ## Push FalkorDB Docker image to Snowpark Container Services
+	docker tag $(FALKORDB_IMAGE) $(SNOWFLAKE_REPO)/$(FALKORDB_IMAGE)
+	docker push $(SNOWFLAKE_REPO)/$(FALKORDB_IMAGE)
+
+build_and_push_falkordb: build_falkordb push_falkordb  ## Build and push FalkorDB image only
+
+clean:           ## Remove local Docker images
+	docker rmi -f $(BACKEND_IMAGE) $(FRONTEND_IMAGE) $(ROUTER_IMAGE) $(FALKORDB_IMAGE) 2>/dev/null || true
