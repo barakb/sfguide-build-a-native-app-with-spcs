@@ -7,3 +7,7 @@ In this guide you will learn how to incorporate Snowpark Container Services into
 ## Step-By-Step Guide
 
 For prerequisites, environment setup, step-by-step guide and instructions, please refer to the [QuickStart Guide](https://quickstarts.snowflake.com/guide/build-a-native-app-with-spcs/index.html).
+
+repo url innqkwc-wc59598.registry.snowflakecomputing.com/spcs_app/napp/img_repo
+barak
+6svFXr6w7XCpPyA

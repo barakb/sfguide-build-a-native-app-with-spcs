@@ -4,7 +4,7 @@ use role accountadmin;
 create role if not exists naspcs_role;
 grant role naspcs_role to role accountadmin;
 grant create integration on account to role naspcs_role;
-grant create compute pool on account to role naspcs_role;
+// grant create compute pool on account to role naspcs_role;
 grant create warehouse on account to role naspcs_role;
 grant create database on account to role naspcs_role;
 grant create application package on account to role naspcs_role;
@@ -32,7 +32,7 @@ grant usage on warehouse wh_nac to role nac with grant option;
 grant imported privileges on database snowflake_sample_data to role nac;
 grant create database on account to role nac;
 grant bind service endpoint on account to role nac with grant option;
-grant create compute pool on account to role nac;
+// grant create compute pool on account to role nac;
 grant create application on account to role nac;
 
 --Step 4.2 - Create Consumer Test Data Database
@@ -52,7 +52,8 @@ show image repositories in schema spcs_app.napp;
 --after creating the package we'll add a version to it using all of the files upload to our spcs_app database
 use role naspcs_role;
 create application package spcs_app_pkg;
-alter application package spcs_app_pkg add version v1 using @spcs_app.napp.app_stage;
+// alter application package spcs_app_pkg add version v1 using @spcs_app.napp.app_stage;
+alter application package spcs_app_pkg register version v1 using @spcs_app.napp.app_stage;
 grant install, develop on application package spcs_app_pkg to role nac;
 
 --Step 7.1 - Install Native App
@@ -61,21 +62,32 @@ grant install, develop on application package spcs_app_pkg to role nac;
 use role nac;
 create application spcs_app_instance from application package spcs_app_pkg using version v1;
 
---Step 7.2 - Create Compute Pool and Grant Privileges
---after succesfully installing the application we need to create a compute pool that the application will use to run the container images 
-create  compute pool pool_nac for application spcs_app_instance
-    min_nodes = 1 max_nodes = 1
-    instance_family = cpu_x64_xs
+--Step 7.2 - Create Compute Pool for Container Services (Admin)
+--as admin, create a compute pool that supports container services
+--using cpu_x64_s to provide more CPU capacity for containers
+use role accountadmin;
+
+--drop existing pool if it exists
+drop compute pool if exists pool_nac_containers;
+
+create compute pool pool_nac_containers
+    min_nodes = 1 
+    max_nodes = 1
+    instance_family = cpu_x64_s
     auto_resume = true;
 
-grant usage on compute pool pool_nac to application spcs_app_instance;
+--grant usage to the NAC role and application
+grant usage on compute pool pool_nac_containers to role nac;
+grant usage on compute pool pool_nac_containers to application spcs_app_instance;
+
+--switch back to NAC role for remaining operations
+use role nac;
 grant usage on warehouse wh_nac to application spcs_app_instance;
 grant bind service endpoint on account to application spcs_app_instance;
 
 --Step 7.3 - Start App Service
---finally we can use the store procedure shipped with the application to start the app 
---we pass in the pool_nac compute pool where the images will run and the wh_nac warehouse which the app will use to execute queries on snowflake
-call spcs_app_instance.app_public.start_app('pool_nac', 'wh_nac');
+--now using the dedicated container services compute pool
+call spcs_app_instance.app_public.start_app('pool_nac_containers', 'wh_nac');
 
 --it takes a few minutes to get the app up and running but you can use the following function to find the app url when it is fully deployed
 call spcs_app_instance.app_public.app_url();
@@ -86,8 +98,11 @@ call spcs_app_instance.app_public.app_url();
 use role nac;
 drop application spcs_app_instance;
 drop warehouse wh_nac;
-drop compute pool pool_nac;
 drop database nac_test;
+
+--clean up compute pool (as admin)
+use role accountadmin;
+drop compute pool pool_nac_containers;
 
 --clean up provider objects
 use role naspcs_role;
