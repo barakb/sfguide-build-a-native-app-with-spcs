@@ -13,10 +13,8 @@ artifacts:
   setup_script: setup.sql
   container_services:
     images:
-      - /spcs_app/napp/img_repo/eap_frontend
-      - /spcs_app/napp/img_repo/eap_backend
-      - /spcs_app/napp/img_repo/eap_router
-      - /spcs_app/napp/img_repo/eap_falkordb
+      - /spcs_app/napp/img_repo/falkordb_router
+      - /spcs_app/napp/img_repo/falkordb_server
 
 privileges:
  - CREATE COMPUTE POOL:

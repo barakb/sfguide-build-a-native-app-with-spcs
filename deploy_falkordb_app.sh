@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Complete Automation Script for SPCS Native App Lab (Robust & Idempotent)
-# This script runs the entire lab process with full automation and can be run multiple times safely
-# Usage: ./run_lab_robust.sh [OPTIONS]
+# FalkorDB App Deployment Script for Snowpark Container Services (SPCS)
+# This script deploys a FalkorDB-based Native App with full automation and can be run multiple times safely
+# Usage: ./deploy_falkordb_app.sh [OPTIONS]
 
 set -e
 
@@ -13,14 +13,17 @@ FORCE_UPLOAD=false
 show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
+    echo "FalkorDB App Deployment Script for Snowpark Container Services"
+    echo "Deploys a graph database application with FalkorDB and router containers"
+    echo ""
     echo "Options:"
     echo "  -f, --force-rebuild    Force rebuild of all Docker images even if they exist"
     echo "  -u, --force-upload     Force re-upload of application files even if they exist"
     echo "  -h, --help            Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                     # Run in normal idempotent mode"
-    echo "  $0 -f                  # Force rebuild all images"
+    echo "  $0                     # Deploy in normal idempotent mode"
+    echo "  $0 -f                  # Force rebuild all images and deploy"
     echo "  $0 --force-rebuild     # Force rebuild all images (long form)"
     echo "  $0 -f -u               # Force rebuild images and re-upload files"
 }
@@ -47,8 +50,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "🎯 SPCS Native App with FalkorDB - Robust Lab Automation (Idempotent)"
-echo "======================================================================"
+echo "🎯 FalkorDB App Deployment for Snowpark Container Services"
+echo "==========================================================="
+echo "📊 Graph Database Application with FalkorDB + Router Architecture"
 if [ "$FORCE_REBUILD" = true ]; then
     echo "🔧 Force rebuild mode enabled"
 fi
@@ -144,7 +148,7 @@ else
     echo "Found $images_status existing images in repository"
 fi
 
-if [ "$images_status" -ge "4" ] && [ "$FORCE_REBUILD" = false ]; then
+if [ "$images_status" -ge "2" ] && [ "$FORCE_REBUILD" = false ]; then
     echo "✅ All images already exist, skipping build..."
 else
     if [ "$FORCE_REBUILD" = true ]; then
@@ -182,10 +186,10 @@ else
     sleep 5  # Wait a moment for images to be available
     new_images_status=$(check_images_exist)
     
-    if [ "$new_images_status" -ge "4" ]; then
+    if [ "$new_images_status" -ge "2" ]; then
         echo "✅ All images successfully built and pushed!"
     else
-        echo "⚠️  Warning: Not all images were found. Found: $new_images_status, Expected: 4+"
+        echo "⚠️  Warning: Not all images were found. Found: $new_images_status, Expected: 2+"
         echo "Continuing anyway, but deployment might fail..."
     fi
 fi
@@ -245,11 +249,11 @@ if [ "$pkg_exists" -ge "1" ]; then
 fi
 
 # Check if application already exists
-app_exists=$(snow sql -q "use role nac; show applications like 'FULLSTACK_APP';" 2>/dev/null | grep -c "FULLSTACK_APP" || echo "0")
+app_exists=$(snow sql -q "use role nac; show applications like 'FALKORDB_APP';" 2>/dev/null | grep -c "FALKORDB_APP" || echo "0")
 
 if [ "$app_exists" -ge "1" ]; then
     echo "⚠️  Application already exists. Dropping and recreating to ensure clean state..."
-    snow sql -q "use role nac; drop application if exists fullstack_app;" || echo "Warning: Could not drop existing application"
+    snow sql -q "use role nac; drop application if exists falkordb_app;" || echo "Warning: Could not drop existing application"
     sleep 2
 fi
 
@@ -283,29 +287,30 @@ else
 fi
 
 echo ""
-echo "🎉 Lab completed successfully!"
+echo "🎉 FalkorDB App deployment completed successfully!"
 echo ""
-echo "📝 Your application is now deployed. The URLs should be displayed above."
+echo "📝 Your FalkorDB application is now deployed and ready to use."
+echo "   Access URLs are displayed above for your graph database interfaces."
 echo ""
 echo "✅ FalkorDB Configuration: Automatic"
-echo "   The FalkorDB container now automatically determines its NEXTAUTH_URL"
-echo "   from the SPCS environment. No manual configuration required!"
+echo "   The FalkorDB container automatically configures itself for the SPCS environment."
+echo "   No manual configuration required!"
 echo ""
-echo "🔧 Useful commands for managing your deployment:"
+echo "🔧 Useful commands for managing your FalkorDB deployment:"
 echo "   - Check application status: snow sql -q \"use role nac; show applications;\""
-echo "   - Get app URL: snow sql -q \"use role nac; call fullstack_app.app_public.app_url();\""
-echo "   - Get FalkorDB Browser URL: snow sql -q \"use role nac; call fullstack_app.app_public.falkordb_browser_url();\""
-echo "   - Get FalkorDB endpoint: snow sql -q \"use role nac; call fullstack_app.app_public.falkordb_endpoint();\""
+echo "   - Get app URL: snow sql -q \"use role nac; call falkordb_app.app_public.app_url();\""
+echo "   - Get FalkorDB Browser URL: snow sql -q \"use role nac; call falkordb_app.app_public.falkordb_browser_url();\""
+echo "   - Get FalkorDB endpoint: snow sql -q \"use role nac; call falkordb_app.app_public.falkordb_endpoint();\""
 echo "   - Check compute pool: snow sql -q \"use role accountadmin; show compute pools;\""
 echo ""
 echo "🧹 To clean up all resources later, run:"
 echo "   snow sql -f scripts/cleanup.sql"
 echo ""
-echo "🔄 To re-run this script safely (idempotent):"
-echo "   ./run_lab_robust.sh"
+echo "🔄 To re-deploy this application safely (idempotent):"
+echo "   ./deploy_falkordb_app.sh"
 echo ""
 echo "🔧 Force rebuild options:"
-echo "   ./run_lab_robust.sh -f          # Force rebuild images"
-echo "   ./run_lab_robust.sh -u          # Force re-upload files"
-echo "   ./run_lab_robust.sh -f -u       # Force rebuild and re-upload"
-echo "   ./run_lab_robust.sh --help      # Show all options"
+echo "   ./deploy_falkordb_app.sh -f          # Force rebuild images"
+echo "   ./deploy_falkordb_app.sh -u          # Force re-upload files"
+echo "   ./deploy_falkordb_app.sh -f -u       # Force rebuild and re-upload"
+echo "   ./deploy_falkordb_app.sh --help      # Show all options"

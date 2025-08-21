@@ -34,7 +34,7 @@ CREATE OR REPLACE PROCEDURE app_public.start_app(poolname VARCHAR, whname VARCHA
 BEGIN
         EXECUTE IMMEDIATE 'CREATE SERVICE IF NOT EXISTS app_public.st_spcs
             IN COMPUTE POOL Identifier(''' || poolname || ''')
-            FROM SPECIFICATION_FILE=''' || '/fullstack.yaml' || '''
+            FROM SPECIFICATION_FILE=''' || '/falkordb.yaml' || '''
             QUERY_WAREHOUSE=''' || whname || '''';
 GRANT USAGE ON SERVICE app_public.st_spcs TO APPLICATION ROLE app_user;
 GRANT SERVICE ROLE app_public.st_spcs!ALL_ENDPOINTS_USAGE TO APPLICATION ROLE app_user;

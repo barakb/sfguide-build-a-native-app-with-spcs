@@ -3,7 +3,7 @@
 
 --Step 1 - Clean Up Consumer Objects
 use role nac;
-drop application if exists fullstack_app;
+drop application if exists falkordb_app;
 drop warehouse if exists wh_nac;
 drop database if exists nac_test;
 

@@ -65,7 +65,7 @@ grant install, develop on application package spcs_app_pkg to role nac;
 --at this point we can switch back to our consumer role and create the application in our account using the application package
 --this is simulating the experience of what would otherwise be the consumer installing the app in a separate account
 use role nac;
-create application fullstack_app from application package spcs_app_pkg using version v1;
+create application falkordb_app from application package spcs_app_pkg using version v1;
 
 --Step 7.2 - Create Compute Pool for Container Services (Admin)
 --as admin, create a compute pool that supports container services
@@ -83,29 +83,29 @@ create compute pool pool_nac_containers
 
 --grant usage to the NAC role and application
 grant usage on compute pool pool_nac_containers to role nac;
-grant usage on compute pool pool_nac_containers to application fullstack_app;
+grant usage on compute pool pool_nac_containers to application falkordb_app;
 
 --switch back to NAC role for remaining operations
 use role nac;
-grant usage on warehouse wh_nac to application fullstack_app;
-grant bind service endpoint on account to application fullstack_app;
+grant usage on warehouse wh_nac to application falkordb_app;
+grant bind service endpoint on account to application falkordb_app;
 
 --Step 7.3 - Start App Service
 --now using the dedicated container services compute pool
-call fullstack_app.app_public.start_app('pool_nac_containers', 'wh_nac');
+call falkordb_app.app_public.start_app('pool_nac_containers', 'wh_nac');
 
 --it takes a few minutes to get the app up and running but you can use the following function to find the app url when it is fully deployed
-call fullstack_app.app_public.app_url();
+call falkordb_app.app_public.app_url();
 
 --get FalkorDB endpoints
-call fullstack_app.app_public.falkordb_browser_url();
-call fullstack_app.app_public.falkordb_endpoint();
+call falkordb_app.app_public.falkordb_browser_url();
+call falkordb_app.app_public.falkordb_endpoint();
 
 
 --Step 8.1 - Clean Up
 --clean up consumer objects
 use role nac;
-drop application fullstack_app;
+drop application falkordb_app;
 drop warehouse wh_nac;
 drop database nac_test;
 
