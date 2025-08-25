@@ -35,14 +35,6 @@ grant bind service endpoint on account to role nac with grant option;
 -- grant create compute pool on account to role nac;
 grant create application on account to role nac;
 
---Step 4.2 - Create Consumer Test Data Database
---with our consumer role created we need to set up a database that will hold the data to be consumed by our application
-use role nac;
-create database if not exists nac_test;
-create schema if not exists nac_test.data;
-use schema nac_test.data;
-create view if not exists orders as select * from snowflake_sample_data.tpch_sf10.orders;
-
 --Step 5.1 - Get Image Repository URL
 --once we've created the database to store our images and na files we can find the image repository url
 show image repositories in schema spcs_app.napp;
@@ -107,7 +99,6 @@ call falkordb_app.app_public.falkordb_endpoint();
 use role nac;
 drop application falkordb_app;
 drop warehouse wh_nac;
-drop database nac_test;
 
 --clean up compute pool (as admin)
 use role accountadmin;

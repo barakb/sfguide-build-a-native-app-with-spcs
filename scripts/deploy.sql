@@ -16,8 +16,8 @@ use role naspcs_role;
 -- Show existing versions first
 show versions in application package spcs_app_pkg;
 
--- Use a hardcoded version for consistency
--- This version will be: v1_0_0 (hardcoded stable version)
+-- Always use the same fixed version: v1_0_0
+-- Register version with latest files (will fail if version already exists, which is expected)
 alter application package spcs_app_pkg register version v1_0_0 using @spcs_app.napp.app_stage;
 grant install, develop on application package spcs_app_pkg to role nac;
 

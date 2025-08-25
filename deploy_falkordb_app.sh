@@ -9,6 +9,7 @@ set -e
 # Parse command line arguments
 FORCE_REBUILD=false
 FORCE_UPLOAD=false
+DEV_MODE=false
 
 show_help() {
     echo "Usage: $0 [OPTIONS]"
@@ -19,13 +20,19 @@ show_help() {
     echo "Options:"
     echo "  -f, --force-rebuild    Force rebuild of all Docker images even if they exist"
     echo "  -u, --force-upload     Force re-upload of application files even if they exist"
+    echo "  -d, --dev              Development mode: reuse Docker images, refresh files & deployments"
     echo "  -h, --help            Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0                     # Deploy in normal idempotent mode"
+    echo "  $0 -d                  # Development mode: fast deploy (reuse images, fresh app)"
     echo "  $0 -f                  # Force rebuild all images and deploy"
     echo "  $0 --force-rebuild     # Force rebuild all images (long form)"
     echo "  $0 -f -u               # Force rebuild images and re-upload files"
+    echo ""
+    echo "Development Tips:"
+    echo "  Use -d for fastest development cycles (skips time-consuming Docker builds)"
+    echo "  Use -f when you've changed Dockerfile or container configuration"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -36,6 +43,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -u|--force-upload)
             FORCE_UPLOAD=true
+            shift
+            ;;
+        -d|--dev)
+            DEV_MODE=true
             shift
             ;;
         -h|--help)
@@ -58,6 +69,11 @@ if [ "$FORCE_REBUILD" = true ]; then
 fi
 if [ "$FORCE_UPLOAD" = true ]; then
     echo "📤 Force upload mode enabled"  
+fi
+if [ "$DEV_MODE" = true ]; then
+    echo "🚀 Development mode: Reusing Docker images, refreshing application deployment"
+    echo "   ⏱️  Skips: Time-consuming Docker image building"
+    echo "   🔄 Recreates: Application files, packages, and deployments for fresh state"
 fi
 echo ""
 
@@ -82,7 +98,7 @@ check_app_package_exists() {
 
 # Function to check if images exist in repository
 check_images_exist() {
-    local images_check=$(snow sql -q "use role naspcs_role; show images in image repository spcs_app.napp.img_repo;" 2>/dev/null | grep -c "eap_" 2>/dev/null || echo "0")
+    local images_check=$(snow sql -q "use role naspcs_role; show images in image repository spcs_app.napp.img_repo;" 2>/dev/null | grep -c "falkordb_" 2>/dev/null || echo "0")
     # Ensure we return a clean integer
     images_check=$(echo "$images_check" | tr -d '\n\r' | grep -o '[0-9]*' | head -1)
     [ -z "$images_check" ] && images_check="0"
@@ -96,6 +112,24 @@ check_files_uploaded() {
     files_check=$(echo "$files_check" | tr -d '\n\r' | grep -o '[0-9]*' | head -1)
     [ -z "$files_check" ] && files_check="0"
     echo "$files_check"
+}
+
+# Function to check if application exists
+check_application_exists() {
+    local app_check=$(snow sql -q "use role nac; show applications like 'FALKORDB_APP';" 2>/dev/null | grep -c "FALKORDB_APP" 2>/dev/null || echo "0")
+    # Ensure we return a clean integer
+    app_check=$(echo "$app_check" | tr -d '\n\r' | grep -o '[0-9]*' | head -1)
+    [ -z "$app_check" ] && app_check="0"
+    echo "$app_check"
+}
+
+# Function to check if compute pool exists
+check_compute_pool_exists() {
+    local pool_check=$(snow sql -q "use role accountadmin; show compute pools like 'POOL_NAC_CONTAINERS';" 2>/dev/null | grep -c "POOL_NAC_CONTAINERS" 2>/dev/null || echo "0")
+    # Ensure we return a clean integer
+    pool_check=$(echo "$pool_check" | tr -d '\n\r' | grep -o '[0-9]*' | head -1)
+    [ -z "$pool_check" ] && pool_check="0"
+    echo "$pool_check"
 }
 
 # Step 1: Setup (idempotent)
@@ -140,16 +174,31 @@ fi
 echo "🔨 Step 3: Checking if images need to be built..."
 
 # Check if images already exist (unless force rebuild is enabled)
+skip_build=false
 if [ "$FORCE_REBUILD" = true ]; then
     echo "🔄 Force rebuild enabled - rebuilding all images..."
     images_status=0  # Force rebuild by setting status to 0
+elif [ "$DEV_MODE" = true ]; then
+    images_status=$(check_images_exist)
+    echo "🚀 Dev mode: Found $images_status existing images in repository"
+    if [ "$images_status" -ge "1" ]; then
+        echo "✅ Dev mode: Reusing existing images (found $images_status), skipping build to save time..."
+        skip_build=true
+    else
+        skip_build=false
+    fi
 else
     images_status=$(check_images_exist)
     echo "Found $images_status existing images in repository"
+    skip_build=false
 fi
 
-if [ "$images_status" -ge "2" ] && [ "$FORCE_REBUILD" = false ]; then
-    echo "✅ All images already exist, skipping build..."
+if [ "$skip_build" = true ] || ([ "$images_status" -ge "2" ] && [ "$FORCE_REBUILD" = false ]); then
+    if [ "$DEV_MODE" = true ]; then
+        echo "✅ Dev mode: Reusing existing images, skipping build to save development time..."
+    else
+        echo "✅ All images already exist, skipping build..."
+    fi
 else
     if [ "$FORCE_REBUILD" = true ]; then
         echo "🔧 Force rebuilding all images..."
@@ -200,16 +249,21 @@ echo "📦 Step 4: Checking if application files need to be uploaded..."
 if [ "$FORCE_UPLOAD" = true ]; then
     echo "🔄 Force upload enabled - re-uploading all files..."
     files_status=0  # Force upload by setting status to 0
+elif [ "$DEV_MODE" = true ]; then
+    echo "🚀 Dev mode: Force re-uploading files for fresh deployment..."
+    files_status=0  # Force upload in dev mode for fresh deployment
 else
     files_status=$(check_files_uploaded)
     echo "Found $files_status manifest files in stage"
 fi
 
-if [ "$files_status" -ge "1" ] && [ "$FORCE_UPLOAD" = false ]; then
+if [ "$files_status" -ge "1" ] && [ "$FORCE_UPLOAD" = false ] && [ "$DEV_MODE" = false ]; then
     echo "✅ Application files already uploaded, skipping..."
 else
     if [ "$FORCE_UPLOAD" = true ]; then
         echo "🔧 Force re-uploading application files..."
+    elif [ "$DEV_MODE" = true ]; then
+        echo "🔧 Dev mode: Re-uploading application files for fresh deployment..."
     else
         echo "🔧 Uploading application files..."
     fi
@@ -242,32 +296,113 @@ echo "🚀 Step 5: Deploying application..."
 # Check if application package already exists
 pkg_exists=$(check_app_package_exists)
 
-if [ "$pkg_exists" -ge "1" ]; then
+if [ "$pkg_exists" -ge "1" ] && [ "$DEV_MODE" = false ]; then
     echo "⚠️  Application package already exists. Dropping and recreating to ensure clean state..."
     snow sql -q "use role naspcs_role; drop application package if exists spcs_app_pkg;" || echo "Warning: Could not drop existing application package"
     sleep 2
+elif [ "$pkg_exists" -ge "1" ] && [ "$DEV_MODE" = true ]; then
+    echo "✅ Application package exists, reusing in dev mode..."
 fi
 
 # Check if application already exists
-app_exists=$(snow sql -q "use role nac; show applications like 'FALKORDB_APP';" 2>/dev/null | grep -c "FALKORDB_APP" || echo "0")
+app_exists=$(check_application_exists)
 
-if [ "$app_exists" -ge "1" ]; then
+if [ "$app_exists" -ge "1" ] && [ "$DEV_MODE" = false ]; then
     echo "⚠️  Application already exists. Dropping and recreating to ensure clean state..."
     snow sql -q "use role nac; drop application if exists falkordb_app;" || echo "Warning: Could not drop existing application"
     sleep 2
+elif [ "$app_exists" -ge "1" ] && [ "$DEV_MODE" = true ]; then
+    echo "✅ Application exists, reusing in dev mode..."
 fi
 
 # Check if compute pool already exists
-pool_exists=$(snow sql -q "use role accountadmin; show compute pools like 'POOL_NAC_CONTAINERS';" 2>/dev/null | grep -c "POOL_NAC_CONTAINERS" || echo "0")
+pool_exists=$(check_compute_pool_exists)
 
-if [ "$pool_exists" -ge "1" ]; then
+if [ "$pool_exists" -ge "1" ] && [ "$DEV_MODE" = false ]; then
     echo "⚠️  Compute pool already exists. Dropping and recreating to ensure clean state..."
     snow sql -q "use role accountadmin; drop compute pool if exists pool_nac_containers;" || echo "Warning: Could not drop existing compute pool"
     sleep 2
+elif [ "$pool_exists" -ge "1" ] && [ "$DEV_MODE" = true ]; then
+    echo "✅ Compute pool exists, reusing in dev mode..."
 fi
 
-# Run the deployment
-snow sql -f scripts/deploy.sql
+# In dev mode, check if we can skip deployment entirely
+if [ "$DEV_MODE" = true ]; then
+    echo ""
+    echo "🔍 Dev Mode: Checking if deployment can be skipped..."
+    
+    # Check current status
+    setup_complete=$(check_setup_complete)
+    images_exist=$(check_images_exist)
+    files_uploaded=$(check_files_uploaded)
+    app_exists=$(check_application_exists)
+    pool_exists=$(check_compute_pool_exists)
+    
+    echo "📊 Current Status:"
+    echo "   - Setup complete: $setup_complete/1"
+    echo "   - Images in repo: $images_exist"
+    echo "   - Files uploaded: $files_uploaded"
+    echo "   - Application exists: $app_exists/1"
+    echo "   - Compute pool exists: $pool_exists/1"
+    
+    if [ "$setup_complete" -ge "1" ] && [ "$images_exist" -ge "2" ] && [ "$files_uploaded" -ge "1" ] && [ "$app_exists" -ge "1" ] && [ "$pool_exists" -ge "1" ]; then
+        echo ""
+        echo "🎉 All resources exist! Skipping deployment and jumping to verification..."
+        echo ""
+        
+        # Just verify the app is working
+        echo "🧪 Verifying existing application..."
+        
+        # Check if FalkorDB service is running
+        app_status=$(snow sql -q "use role nac; call falkordb_app.app_public.start_app('pool_nac_containers', 'wh_nac');" 2>/dev/null | grep -c "Service started" || echo "0")
+        
+        if [ "$app_status" -ge "1" ]; then
+            echo "✅ FalkorDB application is working!"
+        else
+            echo "⚠️  FalkorDB service may need to be started. Running deployment to ensure proper state..."
+        fi
+        
+        # Show URLs
+        echo ""
+        echo "📋 Your FalkorDB Application URLs:"
+        snow sql -q "use role nac; call falkordb_app.app_public.app_url();" 2>/dev/null || echo "App URL not ready yet"
+        snow sql -q "use role nac; call falkordb_app.app_public.falkordb_browser_url();" 2>/dev/null || echo "Browser URL not ready yet"
+        snow sql -q "use role nac; call falkordb_app.app_public.falkordb_endpoint();" 2>/dev/null || echo "Endpoint URL not ready yet"
+        
+        echo ""
+        echo "🚀 Development deployment complete - all resources reused!"
+        echo ""
+        
+        # Skip to the end message
+        jump_to_end=true
+    else
+        echo ""
+        echo "📝 Some resources missing, proceeding with deployment..."
+    fi
+fi
+
+# Run the deployment (unless we're jumping to the end)
+if [ "${jump_to_end:-false}" = false ]; then
+    echo "🚀 Running deployment..."
+    
+    # Handle version management before running deploy.sql
+    echo "🔄 Managing application package version..."
+    
+    # Check if version v1_0_0 exists and deregister it if needed
+    version_exists=$(snow sql -q "use role naspcs_role; show versions in application package spcs_app_pkg;" 2>/dev/null | grep -c "V1_0_0" || echo "0")
+    
+    if [ "$version_exists" -gt "0" ]; then
+        echo "📋 Version v1_0_0 exists, deregistering for update..."
+        snow sql -q "use role naspcs_role; alter application package spcs_app_pkg deregister version v1_0_0;" || echo "Note: Deregister may have failed, continuing..."
+    else
+        echo "📋 Version v1_0_0 does not exist, will create new..."
+    fi
+    
+    # Now run the main deployment
+    snow sql -f scripts/deploy.sql
+else
+    exit 0
+fi
 
 # Check if deployment succeeded
 if [ $? -eq 0 ]; then
@@ -309,11 +444,14 @@ echo ""
 echo "🔄 To re-deploy this application safely (idempotent):"
 echo "   ./deploy_falkordb_app.sh"
 echo ""
-echo "🔧 Force rebuild options:"
+echo "🔧 Deployment options:"
+echo "   ./deploy_falkordb_app.sh -d          # Development mode (fast: reuse images)"
 echo "   ./deploy_falkordb_app.sh -f          # Force rebuild images"
 echo "   ./deploy_falkordb_app.sh -u          # Force re-upload files"
 echo "   ./deploy_falkordb_app.sh -f -u       # Force rebuild and re-upload"
 echo "   ./deploy_falkordb_app.sh --help      # Show all options"
+echo ""
+echo "💡 Development tip: Use -d flag for fastest iteration during development!"
 echo ""
 echo "📊 Next Step: Upload Consumer Data for Graph Analysis"
 echo "======================================================"
@@ -328,14 +466,12 @@ echo "2. 🚀 Upload consumer data to your FalkorDB app:"
 echo "   ./upload_consumer_data.sh"
 echo ""
 echo "3. 🧪 Test the consumer data integration:"
-echo "   # Get data summary:"
-echo "   snow sql -q \"use role nac; call falkordb_app.app_public.get_graph_summary();\""
+echo "   # Use the new load_graph procedure:"
+echo "   snow sql -q \"use role nac; call falkordb_app.app_public.load_graph('my_social_graph', 'nac_consumer_data.social_network.social_nodes', 'nac_consumer_data.social_network.social_relationships');\""
 echo ""
-echo "   # View all nodes:"
-echo "   snow sql -q \"use role nac; call falkordb_app.app_public.get_social_nodes();\""
-echo ""
-echo "   # View all relationships:"
-echo "   snow sql -q \"use role nac; call falkordb_app.app_public.get_social_relationships();\""
+echo "   # Direct data access:"
+echo "   snow sql -q \"use role nac; use database nac_consumer_data; select count(*) as nodes from social_network.social_nodes;\""
+echo "   snow sql -q \"use role nac; use database nac_consumer_data; select count(*) as relations from social_network.social_relationships;\""
 echo ""
 echo "📝 Consumer Data Format:"
 echo "   - Nodes: name (unique), node_label"

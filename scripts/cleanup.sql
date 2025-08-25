@@ -5,7 +5,6 @@
 use role nac;
 drop application if exists falkordb_app;
 drop warehouse if exists wh_nac;
-drop database if exists nac_test;
 
 --Step 2 - Clean Up Compute Pool (as admin)
 use role accountadmin;

@@ -1,30 +1,61 @@
 #!/bin/bash
 
 # Consumer Data Upload Script for FalkorDB Native App
-# This script uploads social network data as consumer tables and provides references to the running app
+# This script uploads social network data and grants permissions to existing FalkorDB app
 # Usage: ./upload_consumer_data.sh
 
 set -e
 
 echo "🚀 FalkorDB Consumer Data Upload Script"
-echo "======================================="
+echo "📊 Uploading CSV data and granting permissions to existing app"
+echo "=============================================================="
 echo ""
 
-# Step 1: Create Consumer Database and Schema
-echo "📋 Step 1: Setting up consumer database and schema..."
+# Step 1: Create Consumer Database and Upload Data
+echo "📋 Step 1: Setting up consumer database and uploading data..."
 
 snow sql -q "
 use role nac;
 
--- Create consumer database if it doesn't exist
+-- Create consumer database if it doesn't exist and ensure proper ownership
 create database if not exists nac_consumer_data;
+
+-- Grant necessary privileges to NAC role for database operations
+use role accountadmin;
+grant ownership on database nac_consumer_data to role nac;
+grant all privileges on database nac_consumer_data to role nac;
+
+use role nac;
 use database nac_consumer_data;
 
 -- Create schema for social network data
 create schema if not exists social_network;
+
+-- Grant ownership on schema as well
+use role accountadmin;
+grant ownership on schema nac_consumer_data.social_network to role nac;
+grant all privileges on schema nac_consumer_data.social_network to role nac;
+
+use role nac;
+use database nac_consumer_data;
 use schema social_network;
 
-select 'Consumer database and schema created successfully' as status;
+-- Create stage for file uploads
+create stage if not exists csv_stage;
+
+-- Create tables
+create or replace table social_nodes (
+    name VARCHAR(100),
+    node_label VARCHAR(50)
+);
+
+create or replace table social_relationships (
+    from_name VARCHAR(100),
+    to_name VARCHAR(100),
+    relationship_type VARCHAR(50)
+);
+
+select 'Database setup complete' as status;
 "
 
 if [ $? -ne 0 ]; then
@@ -35,40 +66,8 @@ fi
 echo "✅ Consumer database and schema ready!"
 echo ""
 
-# Step 2: Create Tables for Nodes and Relationships
-echo "📊 Step 2: Creating tables for social network data..."
-
-snow sql -q "
-use role nac;
-use database nac_consumer_data;
-use schema social_network;
-
--- Create nodes table
-create or replace table social_nodes (
-    name varchar(100),
-    node_label varchar(50)
-);
-
--- Create relationships table  
-create or replace table social_relationships (
-    from_name varchar(100),
-    to_name varchar(100),
-    relationship_type varchar(50)
-);
-
-select 'Tables created successfully' as status;
-"
-
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to create tables"
-    exit 1
-fi
-
-echo "✅ Tables created successfully!"
-echo ""
-
-# Step 3: Upload CSV Data
-echo "📁 Step 3: Uploading CSV data..."
+# Step 2: Upload CSV files
+echo "📤 Step 2: Uploading CSV files..."
 
 # Check if CSV files exist
 if [ ! -f "consumer/src/social_nodes_data.csv" ]; then
@@ -81,140 +80,99 @@ if [ ! -f "consumer/src/social_relationships.csv" ]; then
     exit 1
 fi
 
-# Create a temporary stage for data upload
+echo "📁 Found CSV files:"
+echo "   - social_nodes_data.csv ($(wc -l < consumer/src/social_nodes_data.csv) lines)"
+echo "   - social_relationships.csv ($(wc -l < consumer/src/social_relationships.csv) lines)"
+echo ""
+
 snow sql -q "
 use role nac;
 use database nac_consumer_data;
 use schema social_network;
 
--- Create temporary stage for CSV upload
-create or replace stage csv_upload_stage;
+-- Upload CSV files
+put file://consumer/src/social_nodes_data.csv @csv_stage auto_compress=false overwrite=true;
+put file://consumer/src/social_relationships.csv @csv_stage auto_compress=false overwrite=true;
 
-select 'Upload stage created' as status;
-"
-
-# Upload CSV files to stage
-echo "📤 Uploading nodes data..."
-snow sql -q "
-use role nac;
-use database nac_consumer_data;
-use schema social_network;
-
-put file://consumer/src/social_nodes_data.csv @csv_upload_stage auto_compress=false overwrite=true;
-"
-
-echo "📤 Uploading relationships data..."
-snow sql -q "
-use role nac;
-use database nac_consumer_data;
-use schema social_network;
-
-put file://consumer/src/social_relationships.csv @csv_upload_stage auto_compress=false overwrite=true;
-"
-
-# Load data into tables
-echo "📋 Loading data into tables..."
-snow sql -q "
-use role nac;
-use database nac_consumer_data;
-use schema social_network;
-
--- Load nodes data
+-- Load data into tables
 copy into social_nodes
-from @csv_upload_stage/social_nodes_data.csv
-file_format = (type = csv field_delimiter = ',' skip_header = 1 field_optionally_enclosed_by = '\"');
+from @csv_stage/social_nodes_data.csv
+file_format = (type = csv field_optionally_enclosed_by = '\"' skip_header = 1);
 
--- Load relationships data
 copy into social_relationships  
-from @csv_upload_stage/social_relationships.csv
-file_format = (type = csv field_delimiter = ',' skip_header = 1 field_optionally_enclosed_by = '\"');
+from @csv_stage/social_relationships.csv
+file_format = (type = csv field_optionally_enclosed_by = '\"' skip_header = 1);
 
--- Show loaded data counts
+-- Check loaded data
 select 'Nodes loaded: ' || count(*) as nodes_status from social_nodes;
 select 'Relationships loaded: ' || count(*) as relationships_status from social_relationships;
 "
 
 if [ $? -ne 0 ]; then
-    echo "❌ Failed to upload and load CSV data"
+    echo "❌ Failed to upload CSV data"
     exit 1
 fi
 
-echo "✅ CSV data uploaded and loaded successfully!"
+echo "✅ CSV data uploaded successfully!"
 echo ""
 
-# Step 4: Grant Permissions and Create References
-echo "🔐 Step 4: Setting up permissions and references..."
+# Step 3: Grant permissions to existing app
+echo "🔑 Step 3: Granting permissions to existing FalkorDB app..."
 
 snow sql -q "
 use role nac;
-use database nac_consumer_data;
-use schema social_network;
 
--- Grant access to the application
+-- Grant permissions to the existing application
 grant usage on database nac_consumer_data to application falkordb_app;
-grant usage on schema social_network to application falkordb_app;
-grant select on table social_nodes to application falkordb_app;
-grant select on table social_relationships to application falkordb_app;
+grant usage on schema nac_consumer_data.social_network to application falkordb_app;
+grant select on table nac_consumer_data.social_network.social_nodes to application falkordb_app;
+grant select on table nac_consumer_data.social_network.social_relationships to application falkordb_app;
 
 select 'Permissions granted to FalkorDB app' as status;
 "
 
 if [ $? -ne 0 ]; then
-    echo "❌ Failed to grant permissions"
+    echo "❌ Failed to grant permissions to FalkorDB app"
     exit 1
 fi
 
-echo "✅ Permissions configured successfully!"
+echo "✅ Permissions granted successfully!"
 echo ""
 
-# Step 5: Test Consumer Data Access
-echo "🧪 Step 5: Testing consumer data access..."
+# Step 4: Test the integration
+echo "🧪 Step 4: Testing the consumer data integration..."
 
-echo "Testing data upload success..."
-snow sql -q "
+test_result=$(snow sql -q "
 use role nac;
-use database nac_consumer_data;
-use schema social_network;
+call falkordb_app.app_public.load_graph('social', 'nac_consumer_data.social_network.social_nodes', 'nac_consumer_data.social_network.social_relationships');
+" 2>/dev/null | grep -E "Graph:|nodes|relations" || echo "Test query failed")
 
--- Show data counts
-select 'Nodes loaded: ' || count(*) as status from social_nodes;
-select 'Relationships loaded: ' || count(*) as status from social_relationships;
-
--- Show sample data
-select 'Sample nodes:' as info;
-select * from social_nodes limit 5;
-
-select 'Sample relationships:' as info;
-select * from social_relationships limit 5;
-"
+if [[ "$test_result" == *"Graph:"* ]]; then
+    echo "✅ Integration test successful!"
+    echo "📊 Result: $test_result"
+else
+    echo "⚠️  Integration test may have failed, but data and permissions are set up."
+    echo "   You can test manually with the command below."
+fi
 
 echo ""
-echo "🎉 Consumer Data Upload Completed Successfully!"
-echo "=============================================="
+echo "🎉 Consumer data upload complete!"
 echo ""
-echo "📊 Your social network data has been uploaded and is ready for use:"
+echo "📊 Summary:"
+echo "   ✅ Consumer database created: nac_consumer_data"
+echo "   ✅ Social network schema created: social_network"
+echo "   ✅ Tables created: social_nodes, social_relationships"
+echo "   ✅ CSV data uploaded and loaded"
+echo "   ✅ Permissions granted to FalkorDB app"
 echo ""
-echo "📋 Consumer Database: nac_consumer_data.social_network"
-echo "   - social_nodes table: Contains person nodes with labels (name, node_label)"
-echo "   - social_relationships table: Contains friendship relationships"
+echo "🔧 Test the integration manually with:"
+echo "   snow sql -q \"use role nac; call falkordb_app.app_public.load_graph('social', 'nac_consumer_data.social_network.social_nodes', 'nac_consumer_data.social_network.social_relationships');\""
 echo ""
-echo "� The FalkorDB application has been granted access to your consumer data."
-echo "   You can now access this data from within FalkorDB or create custom procedures"
-echo "   to load it into your graph database."
+echo "🔍 Check your data with:"
+echo "   snow sql -q \"use role nac; select count(*) from nac_consumer_data.social_network.social_nodes;\""
+echo "   snow sql -q \"use role nac; select count(*) from nac_consumer_data.social_network.social_relationships;\""
 echo ""
-echo "💡 Direct Access Examples:"
-echo "   # Access nodes data:"
-echo "   snow sql -q \"use role nac; use database nac_consumer_data; select * from social_network.social_nodes;\""
+echo "🌐 Access your FalkorDB app URLs:"
+echo "   snow sql -q \"use role nac; call falkordb_app.app_public.app_url();\""
+echo "   snow sql -q \"use role nac; call falkordb_app.app_public.falkordb_browser_url();\""
 echo ""
-echo "   # Access relationships data:"
-echo "   snow sql -q \"use role nac; use database nac_consumer_data; select * from social_network.social_relationships;\""
-echo ""
-echo "🔧 Integration with FalkorDB:"
-echo "   Your FalkorDB application can access this data using REFERENCE() functions"
-echo "   in custom procedures you create for loading data into your graph."
-echo ""
-echo "🔄 To reload data (if CSV files change):"
-echo "   ./upload_consumer_data.sh"
-echo ""
-echo "🧹 To clean up consumer data:"
-echo "   snow sql -q \"use role nac; drop database if exists nac_consumer_data;\""

@@ -14,11 +14,11 @@ CREATE PROCEDURE v1.register_single_callback(ref_name STRING, operation STRING, 
       BEGIN
       CASE (operation)
          WHEN 'ADD' THEN
-            SELECT system$set_reference(:ref_name, :ref_or_alias);
+            EXECUTE IMMEDIATE 'SELECT system$set_reference(?, ?)' USING (ref_name, ref_or_alias);
          WHEN 'REMOVE' THEN
-            SELECT system$remove_reference(:ref_name);
+            EXECUTE IMMEDIATE 'SELECT system$remove_reference(?)' USING (ref_name);
          WHEN 'CLEAR' THEN
-            SELECT system$remove_reference(:ref_name);
+            EXECUTE IMMEDIATE 'SELECT system$remove_reference(?)' USING (ref_name);
          ELSE
             RETURN 'Unknown operation: ' || operation;
       END CASE;
@@ -36,8 +36,8 @@ BEGIN
             IN COMPUTE POOL Identifier(''' || poolname || ''')
             FROM SPECIFICATION_FILE=''' || '/falkordb.yaml' || '''
             QUERY_WAREHOUSE=''' || whname || '''';
-GRANT USAGE ON SERVICE app_public.st_spcs TO APPLICATION ROLE app_user;
-GRANT SERVICE ROLE app_public.st_spcs!ALL_ENDPOINTS_USAGE TO APPLICATION ROLE app_user;
+        GRANT USAGE ON SERVICE app_public.st_spcs TO APPLICATION ROLE app_user;
+        GRANT SERVICE ROLE app_public.st_spcs!ALL_ENDPOINTS_USAGE TO APPLICATION ROLE app_user;
 
 RETURN 'Service started. Check status, and when ready, get URL';
 END;
@@ -60,12 +60,9 @@ CREATE OR REPLACE PROCEDURE app_public.app_url()
     LANGUAGE sql
     AS
 $$
-DECLARE
-    ingress_url VARCHAR;
 BEGIN
     SHOW ENDPOINTS IN SERVICE app_public.st_spcs;
-    SELECT "ingress_url" INTO :ingress_url FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'app' LIMIT 1;
-    RETURN ingress_url;
+    RETURN (SELECT "ingress_url" FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'app' LIMIT 1);
 END
 $$;
 GRANT USAGE ON PROCEDURE app_public.app_url() TO APPLICATION ROLE app_admin;
@@ -76,12 +73,9 @@ CREATE OR REPLACE PROCEDURE app_public.falkordb_browser_url()
     LANGUAGE sql
     AS
 $$
-DECLARE
-    ingress_url VARCHAR;
 BEGIN
     SHOW ENDPOINTS IN SERVICE app_public.st_spcs;
-    SELECT "ingress_url" INTO :ingress_url FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'falkordb-browser' LIMIT 1;
-    RETURN ingress_url;
+    RETURN (SELECT "ingress_url" FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'falkordb-browser' LIMIT 1);
 END
 $$;
 GRANT USAGE ON PROCEDURE app_public.falkordb_browser_url() TO APPLICATION ROLE app_admin;
@@ -92,14 +86,36 @@ CREATE OR REPLACE PROCEDURE app_public.falkordb_endpoint()
     LANGUAGE sql
     AS
 $$
-DECLARE
-    ingress_url VARCHAR;
 BEGIN
     SHOW ENDPOINTS IN SERVICE app_public.st_spcs;
-    SELECT "ingress_url" INTO :ingress_url FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'falkordb' LIMIT 1;
-    RETURN ingress_url;
+    RETURN (SELECT "ingress_url" FROM TABLE (RESULT_SCAN (LAST_QUERY_ID())) WHERE "name" = 'falkordb' LIMIT 1);
 END
 $$;
 GRANT USAGE ON PROCEDURE app_public.falkordb_endpoint() TO APPLICATION ROLE app_admin;
 GRANT USAGE ON PROCEDURE app_public.falkordb_endpoint() TO APPLICATION ROLE app_user;
 
+-- Graph Data Loading Procedure
+CREATE OR REPLACE PROCEDURE app_public.load_graph(graph_name VARCHAR, nodes_ref VARCHAR, relations_ref VARCHAR)
+    RETURNS string
+    LANGUAGE sql
+    AS
+$$
+DECLARE
+    nodes_count NUMBER;
+    relations_count NUMBER;
+    result_msg VARCHAR;
+BEGIN
+    -- Count nodes from the referenced table  
+    nodes_count := (EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM REFERENCE(''' || nodes_ref || ''')');
+    
+    -- Count relationships from the referenced table  
+    relations_count := (EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM REFERENCE(''' || relations_ref || ''')');
+    
+    -- Build result message
+    result_msg := 'Graph: ' || graph_name || ' | Nodes: ' || nodes_count || ' | Relations: ' || relations_count;
+    
+    RETURN result_msg;
+END
+$$;
+GRANT USAGE ON PROCEDURE app_public.load_graph(VARCHAR, VARCHAR, VARCHAR) TO APPLICATION ROLE app_admin;
+GRANT USAGE ON PROCEDURE app_public.load_graph(VARCHAR, VARCHAR, VARCHAR) TO APPLICATION ROLE app_user;

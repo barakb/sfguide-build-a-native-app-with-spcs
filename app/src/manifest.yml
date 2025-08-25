@@ -23,15 +23,4 @@ privileges:
       description: "Enables application to expose service endpoints"
  - CREATE WAREHOUSE:
       description: "Enables application to create its own warehouse(s)"
-
-
-references:
-  - ORDERS_TABLE:
-      label: "Orders View"
-      description: "View created on Orders table from TPC-H samples"
-      privileges:
-        - SELECT
-      object_type: VIEW
-      multi_valued: false
-      register_callback: v1.register_single_callback
   
