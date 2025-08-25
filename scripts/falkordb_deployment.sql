@@ -57,15 +57,15 @@ show image repositories in schema spcs_app.napp;
 --after creating the package we'll add a version to it using all of the files upload to our spcs_app database
 use role naspcs_role;
 create application package spcs_app_pkg;
--- alter application package spcs_app_pkg add version v1 using @spcs_app.napp.app_stage;
-alter application package spcs_app_pkg register version v1 using @spcs_app.napp.app_stage;
+-- alter application package spcs_app_pkg add version v1_0_0 using @spcs_app.napp.app_stage;
+alter application package spcs_app_pkg register version v1_0_0 using @spcs_app.napp.app_stage;
 grant install, develop on application package spcs_app_pkg to role nac;
 
 --Step 7.1 - Install Native App
 --at this point we can switch back to our consumer role and create the application in our account using the application package
 --this is simulating the experience of what would otherwise be the consumer installing the app in a separate account
 use role nac;
-create application falkordb_app from application package spcs_app_pkg using version v1;
+create application falkordb_app from application package spcs_app_pkg using version v1_0_0;
 
 --Step 7.2 - Create Compute Pool for Container Services (Admin)
 --as admin, create a compute pool that supports container services

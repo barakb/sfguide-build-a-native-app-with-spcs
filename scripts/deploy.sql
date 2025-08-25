@@ -16,9 +16,9 @@ use role naspcs_role;
 -- Show existing versions first
 show versions in application package spcs_app_pkg;
 
--- Use a timestamp-based version to ensure uniqueness
--- This version will be: v1755706370 (based on current timestamp)
-alter application package spcs_app_pkg register version v1755706370 using @spcs_app.napp.app_stage;
+-- Use a hardcoded version for consistency
+-- This version will be: v1_0_0 (hardcoded stable version)
+alter application package spcs_app_pkg register version v1_0_0 using @spcs_app.napp.app_stage;
 grant install, develop on application package spcs_app_pkg to role nac;
 
 --Step 2 - Install Native App
@@ -27,10 +27,10 @@ grant install, develop on application package spcs_app_pkg to role nac;
 use role nac;
 drop application if exists falkordb_app;
 
--- Create the app instance using the timestamped version
+-- Create the app instance using the hardcoded version
 create application falkordb_app
 from application package spcs_app_pkg
-using version v1755706370;
+using version v1_0_0;
 
 --Step 3 - Create Compute Pool for Container Services (Admin)
 --as admin, create a compute pool that supports container services
